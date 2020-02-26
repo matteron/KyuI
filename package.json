@@ -1,0 +1,22 @@
+{
+  "name": "kyui",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "browserify main.js -o bundle.js",
+    "start": "gulp"
+  },
+  "author": "Mattia",
+  "license": "ISC",
+  "dependencies": {
+    "haipa": "^1.0.2"
+  },
+  "devDependencies": {
+    "browser-sync": "^2.26.7",
+    "browserify": "^16.5.0",
+    "gulp": "^4.0.2",
+    "vinyl-source-stream": "^2.0.0"
+  }
+}
