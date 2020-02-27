@@ -11,7 +11,8 @@
   "author": "Mattia",
   "license": "ISC",
   "dependencies": {
-    "haipa": "^1.0.2"
+    "events": "^3.1.0",
+    "haipa": "^1.0.4"
   },
   "devDependencies": {
     "browser-sync": "^2.26.7",

@@ -1,3 +1,53 @@
 body {
     font-family: monospace;
 }
+
+#newEntry > div, details > div {
+    display: flex;
+    margin-bottom: 0.3rem;
+}
+#newEntry > div > label, details > div > label {
+    width: 3rem;
+}
+
+#newEntry > div > input, details > div > input {
+    width: 22rem;
+}
+
+main > h4 {
+    margin-bottom: 0;
+}
+
+details > div::before {
+    content: '├';
+}
+
+details > div:last-child::before {
+    content: '└';
+}
+
+details > summary {
+    display: flex;
+    align-items: baseline;
+}
+
+.actions {
+    display: flex;
+    justify-content: flex-end;
+}
+
+.summaryInfo {
+    width: 22rem;
+}
+
+.typeDisplay {
+    color: #444;
+    font-size: 0.7rem;
+}
+.typeDisplay::after {
+    content: ':';
+}
+
+.updateBtn {
+    margin-left: 1rem;
+}

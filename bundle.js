@@ -1,74 +1,606 @@
-(function(){function r(e,n,t){function o(i,f){if(!n[i]){if(!e[i]){var c="function"==typeof require&&require;if(!f&&c)return c(i,!0);if(u)return u(i,!0);var a=new Error("Cannot find module '"+i+"'");throw a.code="MODULE_NOT_FOUND",a}var p=n[i]={exports:{}};e[i][0].call(p.exports,function(r){var n=e[i][1][r];return o(n||r)},p,p.exports,r,e,n,t)}return n[i].exports}for(var u="function"==typeof require&&require,i=0;i<t.length;i++)o(t[i]);return o}return r})()({1:[function(require,module,exports){
-const { get, post } = require('./src/http.js');
-const { toNodes } = require('./src/helpers.js');
+(function(f){if(typeof exports==="object"&&typeof module!=="undefined"){module.exports=f()}else if(typeof define==="function"&&define.amd){define([],f)}else{var g;if(typeof window!=="undefined"){g=window}else if(typeof global!=="undefined"){g=global}else if(typeof self!=="undefined"){g=self}else{g=this}g.DomLibrary = f()}})(function(){var define,module,exports;return (function(){function r(e,n,t){function o(i,f){if(!n[i]){if(!e[i]){var c="function"==typeof require&&require;if(!f&&c)return c(i,!0);if(u)return u(i,!0);var a=new Error("Cannot find module '"+i+"'");throw a.code="MODULE_NOT_FOUND",a}var p=n[i]={exports:{}};e[i][0].call(p.exports,function(r){var n=e[i][1][r];return o(n||r)},p,p.exports,r,e,n,t)}return n[i].exports}for(var u="function"==typeof require&&require,i=0;i<t.length;i++)o(t[i]);return o}return r})()({1:[function(require,module,exports){
+const { toNodes, filterEntries, loopObject, directionOffset } = require('./src/helpers');
 const { html } = require('./src/templates');
+const api = require('./src/api');
+const { StatusNames } = require('./src/constants');
+const ee = require('./src/eventBus');
 
-const workPort = 44306;
-const macPort = 5001;
-const baseUrl = `https://localhost:${macPort}/`;
-const apiUrl = (endpoint) => baseUrl + endpoint;
-const kyurl = (endpoint) => baseUrl + 'api/kyu/' + (endpoint ? endpoint : '');
+module.exports = require('./src/domLibrary');
+
+let typeData = {
+    raw: [],
+    html: '',
+    nodes: []
+}
+let sorted = {};
+let selectors = {
+    types: {},
+    sections: {}
+};
 
 const main = () => {
-    setupEvents();
-    fetchTypes();
-    fetchEntries();
+    selectors = buildSelectors();
+    api.types(data =>{
+        typeData = parseTypeData(data);
+        renderTypes();
+    });
+    api.entries(data => {
+        sorted = filterEntries(data);
+        renderEntries();
+    });
+
+    ee.on('status', updateStatus);
 }
 
-const setupEvents = () => {
-    document.getElementById('submitEntry').addEventListener('click', submitEntry);
-}
-
-const fetchTypes = () => {
-    get(apiUrl('entryType'),
-        (data) => populateTypes(data),
-        (error) => console.error('Unable to fetch types')
-    );
-}
-
-const populateTypes = (types) => {
-    const selector = document.getElementById('type');
-
-    const raw = html.typeOptions(types);
-    const nodes = toNodes(raw);
-    nodes.forEach(node => selector.appendChild(node));
-}
-
-const fetchEntries = () => {
-    get(kyurl(),
-        (data) => populateEntries(data),
-        (error) => console.error('Unable to fetch entries')
-    );
-}
-
-const populateEntries = (entries) => {
-    const selector = document.getElementById('pending');
-    const raw = html.entries(entries);
-    const nodes = toNodes(raw);
-
-    nodes.forEach(node => selector.appendChild(node));
-}
-
-const submitEntry = () => {
-    const body = {
-        title: document.getElementById('title').value,
-        body: document.getElementById('body').value,
-        type: +document.getElementById('type').value,
-        tags: []
+const buildSelectors = () => {
+    return {
+        types: document.getElementById('type'),
+        sections: loopObject(StatusNames, (s) => document.getElementById(s))
     }
-
-    post(kyurl(), body,
-        data => console.log(data),
-        error => console.error('Unable to submit entry.')
-    );
 }
 
-document.addEventListener('readystatechange', function() {
+const parseTypeData = (data) => {
+    const template = html.typeOptions(data);
+    return {
+        raw: data,
+        html: template,
+        nodes: toNodes(template) 
+    }
+}
+
+const renderTypes = () => typeData.nodes.forEach(n => selectors.types.appendChild(n));
+
+const renderEntries = () => {
+    const raws = loopObject(StatusNames, (s) => html.entries(sorted[s], typeData.raw));
+    const nodes = loopObject(StatusNames, (s) => toNodes(raws[s]));
+    StatusNames.forEach(s => {
+        while(selectors.sections[s].firstChild) {
+            selectors.sections[s].firstChild.remove();
+        }
+        nodes[s].forEach(n => selectors.sections[s].appendChild(n));
+    });
+}
+
+const updateStatus = (entry, direction) => {
+    const offset = directionOffset(direction);
+    const status = StatusNames[entry.status.id - offset - 1];
+    const index = sorted[status].findIndex(e => e.id === entry.id);
+    sorted[status].splice(index, 1);
+    sorted[entry.status.name.toLowerCase()].push(entry);
+    renderEntries();
+}
+
+document.addEventListener('readystatechange', () => {
     if (document.readyState === "complete") {
         main();
     }
 });
-},{"./src/helpers.js":8,"./src/http.js":9,"./src/templates":10}],2:[function(require,module,exports){
+},{"./src/api":11,"./src/constants":13,"./src/domLibrary":14,"./src/eventBus":15,"./src/helpers":16,"./src/templates":18}],2:[function(require,module,exports){
+// Copyright Joyent, Inc. and other Node contributors.
+//
+// Permission is hereby granted, free of charge, to any person obtaining a
+// copy of this software and associated documentation files (the
+// "Software"), to deal in the Software without restriction, including
+// without limitation the rights to use, copy, modify, merge, publish,
+// distribute, sublicense, and/or sell copies of the Software, and to permit
+// persons to whom the Software is furnished to do so, subject to the
+// following conditions:
+//
+// The above copyright notice and this permission notice shall be included
+// in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
+// NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+// OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
+// USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+var objectCreate = Object.create || objectCreatePolyfill
+var objectKeys = Object.keys || objectKeysPolyfill
+var bind = Function.prototype.bind || functionBindPolyfill
+
+function EventEmitter() {
+  if (!this._events || !Object.prototype.hasOwnProperty.call(this, '_events')) {
+    this._events = objectCreate(null);
+    this._eventsCount = 0;
+  }
+
+  this._maxListeners = this._maxListeners || undefined;
+}
+module.exports = EventEmitter;
+
+// Backwards-compat with node 0.10.x
+EventEmitter.EventEmitter = EventEmitter;
+
+EventEmitter.prototype._events = undefined;
+EventEmitter.prototype._maxListeners = undefined;
+
+// By default EventEmitters will print a warning if more than 10 listeners are
+// added to it. This is a useful default which helps finding memory leaks.
+var defaultMaxListeners = 10;
+
+var hasDefineProperty;
+try {
+  var o = {};
+  if (Object.defineProperty) Object.defineProperty(o, 'x', { value: 0 });
+  hasDefineProperty = o.x === 0;
+} catch (err) { hasDefineProperty = false }
+if (hasDefineProperty) {
+  Object.defineProperty(EventEmitter, 'defaultMaxListeners', {
+    enumerable: true,
+    get: function() {
+      return defaultMaxListeners;
+    },
+    set: function(arg) {
+      // check whether the input is a positive number (whose value is zero or
+      // greater and not a NaN).
+      if (typeof arg !== 'number' || arg < 0 || arg !== arg)
+        throw new TypeError('"defaultMaxListeners" must be a positive number');
+      defaultMaxListeners = arg;
+    }
+  });
+} else {
+  EventEmitter.defaultMaxListeners = defaultMaxListeners;
+}
+
+// Obviously not all Emitters should be limited to 10. This function allows
+// that to be increased. Set to zero for unlimited.
+EventEmitter.prototype.setMaxListeners = function setMaxListeners(n) {
+  if (typeof n !== 'number' || n < 0 || isNaN(n))
+    throw new TypeError('"n" argument must be a positive number');
+  this._maxListeners = n;
+  return this;
+};
+
+function $getMaxListeners(that) {
+  if (that._maxListeners === undefined)
+    return EventEmitter.defaultMaxListeners;
+  return that._maxListeners;
+}
+
+EventEmitter.prototype.getMaxListeners = function getMaxListeners() {
+  return $getMaxListeners(this);
+};
+
+// These standalone emit* functions are used to optimize calling of event
+// handlers for fast cases because emit() itself often has a variable number of
+// arguments and can be deoptimized because of that. These functions always have
+// the same number of arguments and thus do not get deoptimized, so the code
+// inside them can execute faster.
+function emitNone(handler, isFn, self) {
+  if (isFn)
+    handler.call(self);
+  else {
+    var len = handler.length;
+    var listeners = arrayClone(handler, len);
+    for (var i = 0; i < len; ++i)
+      listeners[i].call(self);
+  }
+}
+function emitOne(handler, isFn, self, arg1) {
+  if (isFn)
+    handler.call(self, arg1);
+  else {
+    var len = handler.length;
+    var listeners = arrayClone(handler, len);
+    for (var i = 0; i < len; ++i)
+      listeners[i].call(self, arg1);
+  }
+}
+function emitTwo(handler, isFn, self, arg1, arg2) {
+  if (isFn)
+    handler.call(self, arg1, arg2);
+  else {
+    var len = handler.length;
+    var listeners = arrayClone(handler, len);
+    for (var i = 0; i < len; ++i)
+      listeners[i].call(self, arg1, arg2);
+  }
+}
+function emitThree(handler, isFn, self, arg1, arg2, arg3) {
+  if (isFn)
+    handler.call(self, arg1, arg2, arg3);
+  else {
+    var len = handler.length;
+    var listeners = arrayClone(handler, len);
+    for (var i = 0; i < len; ++i)
+      listeners[i].call(self, arg1, arg2, arg3);
+  }
+}
+
+function emitMany(handler, isFn, self, args) {
+  if (isFn)
+    handler.apply(self, args);
+  else {
+    var len = handler.length;
+    var listeners = arrayClone(handler, len);
+    for (var i = 0; i < len; ++i)
+      listeners[i].apply(self, args);
+  }
+}
+
+EventEmitter.prototype.emit = function emit(type) {
+  var er, handler, len, args, i, events;
+  var doError = (type === 'error');
+
+  events = this._events;
+  if (events)
+    doError = (doError && events.error == null);
+  else if (!doError)
+    return false;
+
+  // If there is no 'error' event listener then throw.
+  if (doError) {
+    if (arguments.length > 1)
+      er = arguments[1];
+    if (er instanceof Error) {
+      throw er; // Unhandled 'error' event
+    } else {
+      // At least give some kind of context to the user
+      var err = new Error('Unhandled "error" event. (' + er + ')');
+      err.context = er;
+      throw err;
+    }
+    return false;
+  }
+
+  handler = events[type];
+
+  if (!handler)
+    return false;
+
+  var isFn = typeof handler === 'function';
+  len = arguments.length;
+  switch (len) {
+      // fast cases
+    case 1:
+      emitNone(handler, isFn, this);
+      break;
+    case 2:
+      emitOne(handler, isFn, this, arguments[1]);
+      break;
+    case 3:
+      emitTwo(handler, isFn, this, arguments[1], arguments[2]);
+      break;
+    case 4:
+      emitThree(handler, isFn, this, arguments[1], arguments[2], arguments[3]);
+      break;
+      // slower
+    default:
+      args = new Array(len - 1);
+      for (i = 1; i < len; i++)
+        args[i - 1] = arguments[i];
+      emitMany(handler, isFn, this, args);
+  }
+
+  return true;
+};
+
+function _addListener(target, type, listener, prepend) {
+  var m;
+  var events;
+  var existing;
+
+  if (typeof listener !== 'function')
+    throw new TypeError('"listener" argument must be a function');
+
+  events = target._events;
+  if (!events) {
+    events = target._events = objectCreate(null);
+    target._eventsCount = 0;
+  } else {
+    // To avoid recursion in the case that type === "newListener"! Before
+    // adding it to the listeners, first emit "newListener".
+    if (events.newListener) {
+      target.emit('newListener', type,
+          listener.listener ? listener.listener : listener);
+
+      // Re-assign `events` because a newListener handler could have caused the
+      // this._events to be assigned to a new object
+      events = target._events;
+    }
+    existing = events[type];
+  }
+
+  if (!existing) {
+    // Optimize the case of one listener. Don't need the extra array object.
+    existing = events[type] = listener;
+    ++target._eventsCount;
+  } else {
+    if (typeof existing === 'function') {
+      // Adding the second element, need to change to array.
+      existing = events[type] =
+          prepend ? [listener, existing] : [existing, listener];
+    } else {
+      // If we've already got an array, just append.
+      if (prepend) {
+        existing.unshift(listener);
+      } else {
+        existing.push(listener);
+      }
+    }
+
+    // Check for listener leak
+    if (!existing.warned) {
+      m = $getMaxListeners(target);
+      if (m && m > 0 && existing.length > m) {
+        existing.warned = true;
+        var w = new Error('Possible EventEmitter memory leak detected. ' +
+            existing.length + ' "' + String(type) + '" listeners ' +
+            'added. Use emitter.setMaxListeners() to ' +
+            'increase limit.');
+        w.name = 'MaxListenersExceededWarning';
+        w.emitter = target;
+        w.type = type;
+        w.count = existing.length;
+        if (typeof console === 'object' && console.warn) {
+          console.warn('%s: %s', w.name, w.message);
+        }
+      }
+    }
+  }
+
+  return target;
+}
+
+EventEmitter.prototype.addListener = function addListener(type, listener) {
+  return _addListener(this, type, listener, false);
+};
+
+EventEmitter.prototype.on = EventEmitter.prototype.addListener;
+
+EventEmitter.prototype.prependListener =
+    function prependListener(type, listener) {
+      return _addListener(this, type, listener, true);
+    };
+
+function onceWrapper() {
+  if (!this.fired) {
+    this.target.removeListener(this.type, this.wrapFn);
+    this.fired = true;
+    switch (arguments.length) {
+      case 0:
+        return this.listener.call(this.target);
+      case 1:
+        return this.listener.call(this.target, arguments[0]);
+      case 2:
+        return this.listener.call(this.target, arguments[0], arguments[1]);
+      case 3:
+        return this.listener.call(this.target, arguments[0], arguments[1],
+            arguments[2]);
+      default:
+        var args = new Array(arguments.length);
+        for (var i = 0; i < args.length; ++i)
+          args[i] = arguments[i];
+        this.listener.apply(this.target, args);
+    }
+  }
+}
+
+function _onceWrap(target, type, listener) {
+  var state = { fired: false, wrapFn: undefined, target: target, type: type, listener: listener };
+  var wrapped = bind.call(onceWrapper, state);
+  wrapped.listener = listener;
+  state.wrapFn = wrapped;
+  return wrapped;
+}
+
+EventEmitter.prototype.once = function once(type, listener) {
+  if (typeof listener !== 'function')
+    throw new TypeError('"listener" argument must be a function');
+  this.on(type, _onceWrap(this, type, listener));
+  return this;
+};
+
+EventEmitter.prototype.prependOnceListener =
+    function prependOnceListener(type, listener) {
+      if (typeof listener !== 'function')
+        throw new TypeError('"listener" argument must be a function');
+      this.prependListener(type, _onceWrap(this, type, listener));
+      return this;
+    };
+
+// Emits a 'removeListener' event if and only if the listener was removed.
+EventEmitter.prototype.removeListener =
+    function removeListener(type, listener) {
+      var list, events, position, i, originalListener;
+
+      if (typeof listener !== 'function')
+        throw new TypeError('"listener" argument must be a function');
+
+      events = this._events;
+      if (!events)
+        return this;
+
+      list = events[type];
+      if (!list)
+        return this;
+
+      if (list === listener || list.listener === listener) {
+        if (--this._eventsCount === 0)
+          this._events = objectCreate(null);
+        else {
+          delete events[type];
+          if (events.removeListener)
+            this.emit('removeListener', type, list.listener || listener);
+        }
+      } else if (typeof list !== 'function') {
+        position = -1;
+
+        for (i = list.length - 1; i >= 0; i--) {
+          if (list[i] === listener || list[i].listener === listener) {
+            originalListener = list[i].listener;
+            position = i;
+            break;
+          }
+        }
+
+        if (position < 0)
+          return this;
+
+        if (position === 0)
+          list.shift();
+        else
+          spliceOne(list, position);
+
+        if (list.length === 1)
+          events[type] = list[0];
+
+        if (events.removeListener)
+          this.emit('removeListener', type, originalListener || listener);
+      }
+
+      return this;
+    };
+
+EventEmitter.prototype.removeAllListeners =
+    function removeAllListeners(type) {
+      var listeners, events, i;
+
+      events = this._events;
+      if (!events)
+        return this;
+
+      // not listening for removeListener, no need to emit
+      if (!events.removeListener) {
+        if (arguments.length === 0) {
+          this._events = objectCreate(null);
+          this._eventsCount = 0;
+        } else if (events[type]) {
+          if (--this._eventsCount === 0)
+            this._events = objectCreate(null);
+          else
+            delete events[type];
+        }
+        return this;
+      }
+
+      // emit removeListener for all listeners on all events
+      if (arguments.length === 0) {
+        var keys = objectKeys(events);
+        var key;
+        for (i = 0; i < keys.length; ++i) {
+          key = keys[i];
+          if (key === 'removeListener') continue;
+          this.removeAllListeners(key);
+        }
+        this.removeAllListeners('removeListener');
+        this._events = objectCreate(null);
+        this._eventsCount = 0;
+        return this;
+      }
+
+      listeners = events[type];
+
+      if (typeof listeners === 'function') {
+        this.removeListener(type, listeners);
+      } else if (listeners) {
+        // LIFO order
+        for (i = listeners.length - 1; i >= 0; i--) {
+          this.removeListener(type, listeners[i]);
+        }
+      }
+
+      return this;
+    };
+
+function _listeners(target, type, unwrap) {
+  var events = target._events;
+
+  if (!events)
+    return [];
+
+  var evlistener = events[type];
+  if (!evlistener)
+    return [];
+
+  if (typeof evlistener === 'function')
+    return unwrap ? [evlistener.listener || evlistener] : [evlistener];
+
+  return unwrap ? unwrapListeners(evlistener) : arrayClone(evlistener, evlistener.length);
+}
+
+EventEmitter.prototype.listeners = function listeners(type) {
+  return _listeners(this, type, true);
+};
+
+EventEmitter.prototype.rawListeners = function rawListeners(type) {
+  return _listeners(this, type, false);
+};
+
+EventEmitter.listenerCount = function(emitter, type) {
+  if (typeof emitter.listenerCount === 'function') {
+    return emitter.listenerCount(type);
+  } else {
+    return listenerCount.call(emitter, type);
+  }
+};
+
+EventEmitter.prototype.listenerCount = listenerCount;
+function listenerCount(type) {
+  var events = this._events;
+
+  if (events) {
+    var evlistener = events[type];
+
+    if (typeof evlistener === 'function') {
+      return 1;
+    } else if (evlistener) {
+      return evlistener.length;
+    }
+  }
+
+  return 0;
+}
+
+EventEmitter.prototype.eventNames = function eventNames() {
+  return this._eventsCount > 0 ? Reflect.ownKeys(this._events) : [];
+};
+
+// About 1.5x faster than the two-arg version of Array#splice().
+function spliceOne(list, index) {
+  for (var i = index, k = i + 1, n = list.length; k < n; i += 1, k += 1)
+    list[i] = list[k];
+  list.pop();
+}
+
+function arrayClone(arr, n) {
+  var copy = new Array(n);
+  for (var i = 0; i < n; ++i)
+    copy[i] = arr[i];
+  return copy;
+}
+
+function unwrapListeners(arr) {
+  var ret = new Array(arr.length);
+  for (var i = 0; i < ret.length; ++i) {
+    ret[i] = arr[i].listener || arr[i];
+  }
+  return ret;
+}
+
+function objectCreatePolyfill(proto) {
+  var F = function() {};
+  F.prototype = proto;
+  return new F;
+}
+function objectKeysPolyfill(obj) {
+  var keys = [];
+  for (var k in obj) if (Object.prototype.hasOwnProperty.call(obj, k)) {
+    keys.push(k);
+  }
+  return k;
+}
+function functionBindPolyfill(context) {
+  var fn = this;
+  return function () {
+    return fn.apply(context, arguments);
+  };
+}
+
+},{}],3:[function(require,module,exports){
 exports.ariaAttr = [
 	'autocomplete',
 	'checked',
@@ -120,102 +652,198 @@ exports.ariaAttr = [
 ].map(a => 'aria-' + a);
 
 
-},{}],3:[function(require,module,exports){
+},{}],4:[function(require,module,exports){
+exports.baseTags = [
+	//'html', Handeled manually to prepend <!DOCTYPE html>
+	// Document Metadata
+	'base', 'link', 'meta', 'head', 'style', 'title', 
+	// Sectioning Root
+	'body',
+	// Content Sectioning
+	'address', 'article', 'aside', 'footer', 'header', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'hgroup', 'main', 'nav', 'section',
+	// Text Content
+	'blockquote', 'dd', 'div', 'dl', 'dt', 'figcaption', 'figure', 'hr', 'li', 'ol', 'p', 'pre', 'ul',
+	// Inline Text Semantics
+	'a', 'abbr', 'b', 'bdi', 'bdo', 'br', 'cite', 'code', 'data', 'dfn', 'em', 'i', 'kbd', 'mark', 'q','rb',
+	'rp', 'rt', 'rtc', 'ruby', 's', 'samp', 'small', 'span', 'strong', 'sub', 'sup', 'time', 'u', 'var', 'wbr',
+	// Image and Multimedia
+	'area', 'audio', 'img', 'map', 'track', 'video',
+	// Embedded Content
+	'embed', 'iframe', 'object', 'param', 'picture', 'source',
+	// Scripting
+	'canvas', 'noscript', 'script',
+	// Demarcating Edits
+	'del', 'ins',
+	// Table Content
+	'caption', 'col', 'colgroup', 'table', 'tbody', 'td', 'tfoot', 'th', 'thead', 'tr',
+	// Forms
+	'button', 'datalist', 'fieldset', 'form', 'input', 'label', 'legend', 'meter', 'optgroup', 'option', 'output', 'progress', 'select', 'textarea',
+	// Interactive Elements
+	'details', 'dialog', 'menu', 'summary',
+	// Web Components
+	'slot', 'template'
+];
 
+exports.baseAttr = [
+	// A
+	'abbr', 'accept', 'acceptCharset', 'accessKey', 'action', 'allowFullScreen', 'allowTransparency', 'alt', 'as', 'async', 'autoComplete', 'autoFocus', 'autoPlay',
+	// C  NOTE: 'class' is replaced with 'classes' due to name collision.
+	'cellPadding', 'cellSpacing', 'challenge', 'charset', 'checked', 'cite', 'className', 'cols', 'colSpan', 'command', 'content', 'contentEditable',
+	'contextMenu', 'controls', 'coords', 'crossOrigin',
+	// D
+	'data', 'dateTime', 'default', 'defer', 'dir', 'disabled', 'download', 'draggable', 'dropzone',
+	// E
+	'encType',
+	// F  NOTE: 'for' is replaced with 'isFor' due to name collision.
+	'form', 'formAction', 'formEncType', 'formMethod', 'formNoValidate', 'formTarget', 'frameBorder',
+	// H
+	'headers', 'height', 'hidden', 'high', 'href', 'hrefLang', 'htmlFor', 'httpEquiv',
+	// I
+	'icon', 'id', 'inputMode', 'isMap', 'itemId', 'itemProp', 'itemRef', 'itemScope', 'itemType',
+	// K
+	'kind',
+	// L
+	'label', 'lang', 'list', 'loop',
+	// M
+	'manifest', 'max', 'maxLength', 'media', 'mediaGroup', 'method', 'min', 'minLength', 'multiple', 'muted',
+	// N
+	'name', 'noValidate',
+	// O
+	'open', 'optimum',
+	// P
+	'pattern', 'ping', 'placeholder', 'poster', 'preload',
+	// R
+	'radioGroup', 'readOnly', 'rel', 'required', 'role', 'rows', 'rowSpan',
+	// S
+	'sandbox', 'scope', 'scoped', 'scrolling', 'seamless', 'selected', 'shape', 'size', 'sizes', 'sortable', 'span', 'spellCheck', 'src', 'srcDoc', 'srcSet',
+	'start', 'step', 'style',
+	// T
+	'tabIndex', 'target', 'title', 'translate', 'type', 'typeMustMatch',
+	// U
+	'useMap',
+	// V
+	'value', 'version',
+	// W
+	'width', 'wmode', 'wrap'
+];
+},{}],5:[function(require,module,exports){
 // Based on MDN List
 // https://developer.mozilla.org/en-US/docs/Web/HTML/Element
+const { baseTags, baseAttr } = require('./base');
+const { svgTags, svgAttr } = require('./svg');	
+const { ariaAttr } = require('./aria');
+const { eventAttr } = require('./events');
 
-module.exports = (useSvg) => {
-	const { svgTags, svgAttr } = useSvg ? require('./svg') : { svgTags: [], svgAttr: [] };	
-	const { ariaAttr } = require('./aria');
+exports.tagList = [
+	...baseTags,
+	// SVG
+	...svgTags
+];
 
-	const tagList = [
-		//'html', Handeled manually to prepend <!DOCTYPE html>
-		// Document Metadata
-		'base', 'link', 'meta', 'head', 'style', 'title', 
-		// Sectioning Root
-		'body',
-		// Content Sectioning
-		'address', 'article', 'aside', 'footer', 'header', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'hgroup', 'main', 'nav', 'section',
-		// Text Content
-		'blockquote', 'dd', 'div', 'dl', 'dt', 'figcaption', 'figure', 'hr', 'li', 'ol', 'p', 'pre', 'ul',
-		// Inline Text Semantics
-		'a', 'abbr', 'b', 'bdi', 'bdo', 'br', 'cite', 'code', 'data', 'dfn', 'em', 'i', 'kbd', 'mark', 'q','rb',
-		'rp', 'rt', 'rtc', 'ruby', 's', 'samp', 'small', 'span', 'strong', 'sub', 'sup', 'time', 'u', 'var', 'wbr',
-		// Image and Multimedia
-		'area', 'audio', 'img', 'map', 'track', 'video',
-		// Embedded Content
-		'embed', 'iframe', 'object', 'param', 'picture', 'source',
-		// Scripting
-		'canvas', 'noscript', 'script',
-		// Demarcating Edits
-		'del', 'ins',
-		// Table Content
-		'caption', 'col', 'colgroup', 'table', 'tbody', 'td', 'tfoot', 'th', 'thead', 'tr',
-		// Forms
-		'button', 'datalist', 'fieldset', 'form', 'input', 'label', 'legend', 'meter', 'optgroup', 'option', 'output', 'progress', 'select', 'textarea',
-		// Interactive Elements
-		'details', 'dialog', 'menu', 'summary',
-		// Web Components
-		'slot', 'template',
-		// SVG
-		...svgTags
-	];
+exports.attrList = [
+	...baseAttr,
+	// SVG
+	...svgAttr,
+	// Aria
+	...ariaAttr,
+	// Global Event Handlers
+	...eventAttr
+];
 
-	const attrList = [
-		// A
-		'abbr', 'accept', 'acceptCharset', 'accessKey', 'action', 'allowFullScreen', 'allowTransparency', 'alt', 'as', 'async', 'autoComplete', 'autoFocus', 'autoPlay',
-		// C  NOTE: Class is replaced with classes due to name collision.
-		'cellPadding', 'cellSpacing', 'challenge', 'charset', 'checked', 'cite', 'className', 'cols', 'colSpan', 'command', 'content', 'contentEditable',
-		'contextMenu', 'controls', 'coords', 'crossOrigin',
-		// D
-		'data', 'dateTime', 'default', 'defer', 'dir', 'disabled', 'download', 'draggable', 'dropzone',
-		// E
-		'encType',
-		// F
-		'for', 'form', 'formAction', 'formEncType', 'formMethod', 'formNoValidate', 'formTarget', 'frameBorder',
-		// H
-		'headers', 'height', 'hidden', 'high', 'href', 'hrefLang', 'htmlFor', 'httpEquiv',
-		// I
-		'icon', 'id', 'inputMode', 'isMap', 'itemId', 'itemProp', 'itemRef', 'itemScope', 'itemType',
-		// K
-		'kind',
-		// L
-		'label', 'lang', 'list', 'loop',
-		// M
-		'manifest', 'max', 'maxLength', 'media', 'mediaGroup', 'method', 'min', 'minLength', 'multiple', 'muted',
-		// N
-		'name', 'noValidate',
-		// O
-		'open', 'optimum',
-		// P
-		'pattern', 'ping', 'placeholder', 'poster', 'preload',
-		// R
-		'radioGroup', 'readOnly', 'rel', 'required', 'role', 'rows', 'rowSpan',
-		// S
-		'sandbox', 'scope', 'scoped', 'scrolling', 'seamless', 'selected', 'shape', 'size', 'sizes', 'sortable', 'span', 'spellCheck', 'src', 'srcDoc', 'srcSet',
-		'start', 'step', 'style',
-		// T
-		'tabIndex', 'target', 'title', 'translate', 'type', 'typeMustMatch',
-		// U
-		'useMap',
-		// V
-		'value', 'version',
-		// W
-		'width', 'wmode', 'wrap',
-		// SVG
-		...svgAttr,
-		// Aria
-		...ariaAttr
-	];
-
-	return {
-		tags: tagList,
-		attr: attrList
-	}
-}
-
-},{"./aria":2,"./svg":4}],4:[function(require,module,exports){
+},{"./aria":3,"./base":4,"./events":6,"./svg":7}],6:[function(require,module,exports){
+exports.eventAttr = [
+	'onabort',
+	'onanimationcancel ',
+	'onanimationend ',
+	'onanimationiteration ',
+	'onanimationstart ',
+	'onauxclick ',
+	'onblur',
+	'onerror',
+	'onfocus',
+	'oncancel',
+	'oncanplay',
+	'oncanplaythrough',
+	'onchange',
+	'onclick',
+	'onclose',
+	'oncontextmenu',
+	'oncuechange',
+	'ondblclick',
+	'ondrag',
+	'ondragend',
+	'ondragenter',
+	'ondragexit',
+	'ondragleave',
+	'ondragover',
+	'ondragstart',
+	'ondrop',
+	'ondurationchange',
+	'onemptied',
+	'onended',
+	'onformdata',
+	'ongotpointercapture',
+	'oninput',
+	'oninvalid',
+	'onkeydown',
+	'onkeypress',
+	'onkeyup',
+	'onload',
+	'onloadeddata',
+	'onloadedmetadata',
+	'onloadend',
+	'onloadstart',
+	'onlostpointercapture',
+	'onmousedown',
+	'onmouseenter',
+	'onmouseleave',
+	'onmousemove',
+	'onmouseout',
+	'onmouseover',
+	'onmouseup',
+	'onmousewheel  ',
+	'onwheel',
+	'onpause',
+	'onplay',
+	'onplaying',
+	'onpointerdown',
+	'onpointermove',
+	'onpointerup',
+	'onpointercancel',
+	'onpointerover',
+	'onpointerout',
+	'onpointerenter',
+	'onpointerleave',
+	'onpointerlockchange ',
+	'onpointerlockerror ',
+	'onprogress',
+	'onratechange',
+	'onreset',
+	'onresize',
+	'onscroll',
+	'onseeked',
+	'onseeking',
+	'onselect',
+	'onselectstart',
+	'onselectionchange',
+	'onshow',
+	'onsort ',
+	'onstalled',
+	'onsubmit',
+	'onsuspend',
+	'ontimeupdate',
+	'onvolumechange',
+	'ontouchcancel  ',
+	'ontouchend  ',
+	'ontouchmove  ',
+	'ontouchstart  ',
+	'ontransitioncancel',
+	'ontransitionend',
+	'ontransitionrun',
+	'ontransitionstart',
+	'onwaiting'
+];
+},{}],7:[function(require,module,exports){
 exports.svgTags = [
 	// A
 	'a', 'animate', 'animateMotion', 'animateTransform',
@@ -317,7 +945,7 @@ exports.svgAttr = [
 	// Z
 	'z', 'zoomAndPan'
 ];
-},{}],5:[function(require,module,exports){
+},{}],8:[function(require,module,exports){
 function kebabeToCamel(s) {
   return s.replace(/([-_][a-z])/ig, ($1) => {
     return $1.toUpperCase().replace('-', '');
@@ -331,13 +959,16 @@ function createAttr(attrName) {
 }
 
 function createAttributes(arr) {
-	const out = { classes: createAttr('class') };
+	const out = { 
+		classes: createAttr('class'),
+		isFor: createAttr('for')
+ 	};
 	var result = arr.forEach(a => out[kebabeToCamel(a)] = createAttr(a));
 	return out;
 }
 
 module.exports = (attrList) => createAttributes(attrList);
-},{}],6:[function(require,module,exports){
+},{}],9:[function(require,module,exports){
 class Element {
 	constructor(name, attr, internal) {
 		this.tag = name;
@@ -370,20 +1001,173 @@ function generateTags(arr) {
 }
 
 module.exports = (tagList) => generateTags(tagList);
-},{}],7:[function(require,module,exports){
-const haipa = (useSvg) => {
-	const data = require('./data/data')(useSvg);
-	return {
-		tags: require('./factories/tags')(data.tags),
-		attr: require('./factories/attr')(data.attr)
-	}
+},{}],10:[function(require,module,exports){
+const { tagList, attrList } = require('./data/data');
+
+const haipa = {
+	tags: require('./factories/tags')(tagList),
+	attr: require('./factories/attr')(attrList)
 }
 
 module.exports = haipa;
-},{"./data/data":3,"./factories/attr":5,"./factories/tags":6}],8:[function(require,module,exports){
+},{"./data/data":5,"./factories/attr":8,"./factories/tags":9}],11:[function(require,module,exports){
+const { get, post } = require('./http');
+const { apiUrl, kyurl } = require('./helpers');
+
+const fetchTypes = (callback) => get(apiUrl('entryType'), callback);
+
+const fetchEntries = (callback) => get(kyurl(), callback);
+
+module.exports = {
+    types: fetchTypes,
+    entries: fetchEntries,
+};
+},{"./helpers":16,"./http":17}],12:[function(require,module,exports){
+const ports = {
+    work: 44306,
+    mac: 5001,
+}
+module.exports = {
+    port: ports.work,
+    url: 'https://localhost'
+};
+
+},{}],13:[function(require,module,exports){
+exports.StatusEnum = {
+    pending: 1,
+    active: 2,
+    complete: 3
+}
+
+exports.StatusNames = [
+  'pending',
+  'active',
+  'complete'  
+]
+
+exports.StatusDirection = {
+    elevate: 'elevate',
+    demote: 'demote'
+}
+
+exports.TypeEnum = {
+    link: 1
+}
+},{}],14:[function(require,module,exports){
+const { post, patch } = require('./http');
+const { kyurl, apiUrl } = require('./helpers');
+const { TypeEnum } = require('./constants');
+const ee = require('./eventBus');
+
+const submitEntry = () => {
+    const body = {
+        title: document.getElementById('title').value,
+        body: document.getElementById('body').value,
+        type: +document.getElementById('type').value,
+        tags: []
+    }
+    post(kyurl(), body);
+}
+
+const updateStatus = (id, direction) => {
+    patch(kyurl(`${direction}/${id}`), {}, 
+        data => ee.emit('status', data, direction)
+    );
+}
+
+const updateEntry = (id) => {
+    const body = {
+        id: id,
+        title: document.getElementById(`title:${id}`).value,
+        body: document.getElementById(`body:${id}`).value,
+        type: +document.getElementById(`type:${id}`).value,
+        tags: []
+    }
+    patch(kyurl(), body);
+}
+
+const openLink = (e, id) => {
+    var type = +document.getElementById(`type:${id}`).value;
+    if (e.ctrlKey && type === TypeEnum.link) {
+        var link = document.getElementById(`body:${id}`).value;
+        window.open(link);
+    }
+}
+
+function DomLibrary() { }
+DomLibrary.prototype.submitEntry = submitEntry;
+DomLibrary.prototype.updateStatus = updateStatus;
+DomLibrary.prototype.updateEntry = updateEntry;
+DomLibrary.prototype.openLink = openLink;
+module.exports = DomLibrary;
+},{"./constants":13,"./eventBus":15,"./helpers":16,"./http":17}],15:[function(require,module,exports){
+const EventEmitter = require('events');
+const ee = new EventEmitter;
+
+module.exports = ee;
+},{"events":2}],16:[function(require,module,exports){
+var config = require('./config');
+var { StatusNames, StatusDirection } = require('./constants');
+
 const toNodes = (html) => new DOMParser().parseFromString(html, 'text/html').body.childNodes;
 exports.toNodes = toNodes;
-},{}],9:[function(require,module,exports){
+
+const baseUrl = `${config.url}:${config.port}/`;
+const apiUrl = (endpoint) => baseUrl + endpoint;
+const kyurl = (endpoint) => baseUrl + 'api/kyu/' + (endpoint ? endpoint : '');
+
+exports.apiUrl = apiUrl;
+exports.kyurl = kyurl;
+
+const loopObject = (array, callback) => {
+    return array.reduce((acc, cur) => {
+        acc[cur] = callback(cur);
+        return acc;
+    }, {});
+}
+exports.loopObject = loopObject;
+
+const filterEntries = (entries) => {
+    const filtered = loopObject(StatusNames, s => []);
+    entries.forEach(e => {
+        filtered[e.status.name.toLowerCase()].push(e);
+    });
+    return filtered;
+}
+exports.filterEntries = filterEntries;
+
+const directionOffset = (direction) => 
+    direction === StatusDirection.elevate
+        ? 1
+        : direction === StatusDirection.demote
+            ? -1
+            : 0;
+exports.directionOffset = directionOffset;
+},{"./config":12,"./constants":13}],17:[function(require,module,exports){
+const request = (url, options, successFunc, errorFunc) => {
+    fetch(url, options).then((response) => {
+        if (!response.ok) {
+            throw new Error(error);
+        }
+        return response.json();
+    }).then(successFunc)
+    .catch(errorFunc ? errorFunc : console.error);
+};
+
+const requestTypes = {
+    post: 'POST',
+    patch: 'PATCH',
+    delete: 'DELETE'
+}
+
+const jsonOptions = (type, body) => ({
+    method: type,
+    headers: {
+        'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body)
+});
+
 /**
  * 
  * @param {string} url 
@@ -391,13 +1175,14 @@ exports.toNodes = toNodes;
  * @param {function} errorFunc 
  */
 const get = (url, successFunc, errorFunc) => {
-    fetch(url).then((response) => {
-        if (!response.ok) {
-            throw new Error(error);
-        }
-        return response.json();
-    }).then(successFunc)
-    .catch(errorFunc);
+    // fetch(url).then((response) => {
+    //     if (!response.ok) {
+    //         throw new Error(error);
+    //     }
+    //     return response.json();
+    // }).then(successFunc)
+    // .catch(errorFunc ? errorFunc : console.error);
+    request(url, null, successFunc, errorFunc);
 };
 
 exports.get = get;
@@ -410,41 +1195,66 @@ exports.get = get;
  * @param {function} errorFunc 
  */
 const post = (url, body, successFunc, errorFunc) => {
-    const options = {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(body)
-    };
-
-    fetch(url, options).then((response) => {
-        if (!response.ok) {
-            throw new Error(response);
-        }
-        return response.json();
-    }).then(successFunc)
-    .catch(errorFunc);
+    const options = jsonOptions(requestTypes.post, body);
+    request(url, options, successFunc, errorFunc);
 }
 
 exports.post = post;
-},{}],10:[function(require,module,exports){
-const {tags, attr} = require('haipa')();
-const { div, option } = tags;
-const { value, id } = attr;
 
-const typeOptions = (types) => 
+const patch = (url, body, successFunc, errorFunc) => {
+    const options = jsonOptions(requestTypes.patch, body);
+    request(url, options, successFunc, errorFunc);
+}
+
+exports.patch = patch;
+},{}],18:[function(require,module,exports){
+const { tags, attr } = require('haipa');
+const { div, option, span, details, summary, label, input, button, select } = tags;
+const { value, id, isFor, name, classes, onclick } = attr;
+const { StatusEnum, StatusDirection } = require('./constants.js');
+
+const typeOptions = (types, selected) => 
     types.reduce((acc, cur) =>
-        acc + '\n' + option([value(cur.id)], [cur.name]), option([value``], []
+        acc + '\n' + option([value(cur.id), (selected === cur.id ? 'selected="selected"' : '')], [cur.name]), option([value``], []
     )
 );
 
-const singleEntry = (e) => div([id(e.id)], [e.title]);
+const disabled = (test) => {
+    return test ? 'disabled' : '';
+}
 
-const entries = (entries) => entries.reduce((acc, cur) => acc + '\n' + singleEntry(cur), '');
+const singleEntry = (e, types) => details([id(e.id), onclick(`lib.openLink(event, '${e.id}')`)], [
+    summary([], [
+        div([classes`summaryInfo`], [
+            span([classes`typeDisplay`], [e.type.name]),
+            span([], [e.title]),
+        ]),
+        div([classes`actions`], [
+            button([disabled(e.status.id === StatusEnum.pending), onclick(`lib.updateStatus('${e.id}', '${StatusDirection.demote}')`)], ['🡑']),
+            button([disabled(e.status.id === StatusEnum.complete), onclick(`lib.updateStatus('${e.id}', '${StatusDirection.elevate}')`)], ['🡓']),
+            //button([], ['🗑'])
+        ]),
+    ]),
+    div([], [
+        label([isFor(`title:${e.id}`)], ['Title']),
+        input([name(`title:${e.id}`), id(`title:${e.id}`), value(e.title)])
+    ]),
+    div([], [
+        label([isFor(`body:${e.id}`)], ['Body']),
+        input([name(`body:${e.id}`), id(`body:${e.id}`), value(e.body)])
+    ]),
+    div([], [
+        label([isFor(`type:${e.id}`)], ['Type']),
+        select([name(`type:${e.id}`), id(`type:${e.id}`), value(e.type.id)], [typeOptions(types, e.type.id)]),
+        button([classes`updateBtn`, onclick(`lib.updateEntry('${e.id}')`)], ['Update'])
+    ])
+]);
+
+const entries = (entries, types) => entries.reduce((acc, cur) => acc + '\n' + singleEntry(cur, types), '');
 
 exports.html = {
     typeOptions,
     entries
 }
-},{"haipa":7}]},{},[1]);
+},{"./constants.js":13,"haipa":10}]},{},[1])(1)
+});
