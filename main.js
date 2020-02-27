@@ -1,53 +1,69 @@
-const {tags, attr} = require('haipa')();
-const { div, option } = tags;
-const { value } = attr;
+const { get, post } = require('./src/http.js');
+const { toNodes } = require('./src/helpers.js');
+const { html } = require('./src/templates');
 
-const baseUrl = 'https://localhost:44306/';
+const workPort = 44306;
+const macPort = 5001;
+const baseUrl = `https://localhost:${macPort}/`;
 const apiUrl = (endpoint) => baseUrl + endpoint;
+const kyurl = (endpoint) => baseUrl + 'api/kyu/' + (endpoint ? endpoint : '');
 
 const main = () => {
+    setupEvents();
     fetchTypes();
     fetchEntries();
 }
 
-const httpReq = (type, url, callback) => {
-    var request = new XMLHttpRequest();
-    request.open(type, url, true);
-    request.onload = function() {
-        if (request.status >= 200 && request.status < 400) {
-            var data = JSON.parse(this.response);
-            callback(data);
-        } else {
-            console.error(type + ' request failed.  Code:' + request.status);
-        }
-    }
-    request.send();
+const setupEvents = () => {
+    document.getElementById('submitEntry').addEventListener('click', submitEntry);
 }
-
-const getReq = (url, callback) => {
-    httpReq('GET', url, callback);
-}
-
-const toNodes = (html) => new DOMParser().parseFromString(html, 'text/html').body.childNodes;
 
 const fetchTypes = () => {
-    getReq(apiUrl('entryType'), (data) => {
-        populateTypes(data);    
-    });
+    get(apiUrl('entryType'),
+        (data) => populateTypes(data),
+        (error) => console.error('Unable to fetch types')
+    );
 }
 
 const populateTypes = (types) => {
     const selector = document.getElementById('type');
 
-    const html = types.reduce((acc, cur) => acc + '\n' + option([value(cur.id)], [cur.name]), option([value``], []));
-    const nodes = toNodes(html);
+    const raw = html.typeOptions(types);
+    const nodes = toNodes(raw);
     nodes.forEach(node => selector.appendChild(node));
 }
 
 const fetchEntries = () => {
-    getReq(apiUrl('entry'), (data) => {
-        console.log(data);
-    })
+    get(kyurl(),
+        (data) => populateEntries(data),
+        (error) => console.error('Unable to fetch entries')
+    );
 }
 
-main();
+const populateEntries = (entries) => {
+    const selector = document.getElementById('pending');
+    const raw = html.entries(entries);
+    const nodes = toNodes(raw);
+
+    nodes.forEach(node => selector.appendChild(node));
+}
+
+const submitEntry = () => {
+    const body = {
+        title: document.getElementById('title').value,
+        body: document.getElementById('body').value,
+        type: +document.getElementById('type').value,
+        tags: []
+    }
+
+    post(kyurl(), body,
+        data => console.log(data),
+        error => console.error('Unable to submit entry.')
+    );
+}
+
+document.addEventListener('readystatechange', function() {
+    if (document.readyState === "complete") {
+        main();
+    }
+});

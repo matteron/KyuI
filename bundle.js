@@ -1,58 +1,74 @@
 (function(){function r(e,n,t){function o(i,f){if(!n[i]){if(!e[i]){var c="function"==typeof require&&require;if(!f&&c)return c(i,!0);if(u)return u(i,!0);var a=new Error("Cannot find module '"+i+"'");throw a.code="MODULE_NOT_FOUND",a}var p=n[i]={exports:{}};e[i][0].call(p.exports,function(r){var n=e[i][1][r];return o(n||r)},p,p.exports,r,e,n,t)}return n[i].exports}for(var u="function"==typeof require&&require,i=0;i<t.length;i++)o(t[i]);return o}return r})()({1:[function(require,module,exports){
-const {tags, attr} = require('haipa')();
-const { div, option } = tags;
-const { value } = attr;
+const { get, post } = require('./src/http.js');
+const { toNodes } = require('./src/helpers.js');
+const { html } = require('./src/templates');
 
-const baseUrl = 'https://localhost:44306/';
+const workPort = 44306;
+const macPort = 5001;
+const baseUrl = `https://localhost:${macPort}/`;
 const apiUrl = (endpoint) => baseUrl + endpoint;
+const kyurl = (endpoint) => baseUrl + 'api/kyu/' + (endpoint ? endpoint : '');
 
 const main = () => {
+    setupEvents();
     fetchTypes();
     fetchEntries();
 }
 
-const httpReq = (type, url, callback) => {
-    var request = new XMLHttpRequest();
-    request.open(type, url, true);
-    request.onload = function() {
-        if (request.status >= 200 && request.status < 400) {
-            var data = JSON.parse(this.response);
-            callback(data);
-        } else {
-            console.error(type + ' request failed.  Code:' + request.status);
-        }
-    }
-    request.send();
+const setupEvents = () => {
+    document.getElementById('submitEntry').addEventListener('click', submitEntry);
 }
-
-const getReq = (url, callback) => {
-    httpReq('GET', url, callback);
-}
-
-const toNodes = (html) => new DOMParser().parseFromString(html, 'text/html').body.childNodes;
 
 const fetchTypes = () => {
-    getReq(apiUrl('entryType'), (data) => {
-        populateTypes(data);    
-    });
+    get(apiUrl('entryType'),
+        (data) => populateTypes(data),
+        (error) => console.error('Unable to fetch types')
+    );
 }
 
 const populateTypes = (types) => {
     const selector = document.getElementById('type');
 
-    const html = types.reduce((acc, cur) => acc + '\n' + option([value(cur.id)], [cur.name]), option([value``], []));
-    const nodes = toNodes(html);
+    const raw = html.typeOptions(types);
+    const nodes = toNodes(raw);
     nodes.forEach(node => selector.appendChild(node));
 }
 
 const fetchEntries = () => {
-    getReq(apiUrl('entry'), (data) => {
-        console.log(data);
-    })
+    get(kyurl(),
+        (data) => populateEntries(data),
+        (error) => console.error('Unable to fetch entries')
+    );
 }
 
-main();
-},{"haipa":7}],2:[function(require,module,exports){
+const populateEntries = (entries) => {
+    const selector = document.getElementById('pending');
+    const raw = html.entries(entries);
+    const nodes = toNodes(raw);
+
+    nodes.forEach(node => selector.appendChild(node));
+}
+
+const submitEntry = () => {
+    const body = {
+        title: document.getElementById('title').value,
+        body: document.getElementById('body').value,
+        type: +document.getElementById('type').value,
+        tags: []
+    }
+
+    post(kyurl(), body,
+        data => console.log(data),
+        error => console.error('Unable to submit entry.')
+    );
+}
+
+document.addEventListener('readystatechange', function() {
+    if (document.readyState === "complete") {
+        main();
+    }
+});
+},{"./src/helpers.js":8,"./src/http.js":9,"./src/templates":10}],2:[function(require,module,exports){
 exports.ariaAttr = [
 	'autocomplete',
 	'checked',
@@ -364,4 +380,71 @@ const haipa = (useSvg) => {
 }
 
 module.exports = haipa;
-},{"./data/data":3,"./factories/attr":5,"./factories/tags":6}]},{},[1]);
+},{"./data/data":3,"./factories/attr":5,"./factories/tags":6}],8:[function(require,module,exports){
+const toNodes = (html) => new DOMParser().parseFromString(html, 'text/html').body.childNodes;
+exports.toNodes = toNodes;
+},{}],9:[function(require,module,exports){
+/**
+ * 
+ * @param {string} url 
+ * @param {function} successFunc 
+ * @param {function} errorFunc 
+ */
+const get = (url, successFunc, errorFunc) => {
+    fetch(url).then((response) => {
+        if (!response.ok) {
+            throw new Error(error);
+        }
+        return response.json();
+    }).then(successFunc)
+    .catch(errorFunc);
+};
+
+exports.get = get;
+
+/**
+ * 
+ * @param {string} url 
+ * @param {object} body 
+ * @param {function} successFunc 
+ * @param {function} errorFunc 
+ */
+const post = (url, body, successFunc, errorFunc) => {
+    const options = {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body)
+    };
+
+    fetch(url, options).then((response) => {
+        if (!response.ok) {
+            throw new Error(response);
+        }
+        return response.json();
+    }).then(successFunc)
+    .catch(errorFunc);
+}
+
+exports.post = post;
+},{}],10:[function(require,module,exports){
+const {tags, attr} = require('haipa')();
+const { div, option } = tags;
+const { value, id } = attr;
+
+const typeOptions = (types) => 
+    types.reduce((acc, cur) =>
+        acc + '\n' + option([value(cur.id)], [cur.name]), option([value``], []
+    )
+);
+
+const singleEntry = (e) => div([id(e.id)], [e.title]);
+
+const entries = (entries) => entries.reduce((acc, cur) => acc + '\n' + singleEntry(cur), '');
+
+exports.html = {
+    typeOptions,
+    entries
+}
+},{"haipa":7}]},{},[1]);
