@@ -5,14 +5,17 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "build": "browserify main.js -o bundle.js",
+    "build": "gulp build",
     "start": "gulp"
   },
   "author": "Mattia",
   "license": "ISC",
   "dependencies": {
+    "envify": "^4.1.0",
     "events": "^3.1.0",
-    "haipa": "^1.0.4"
+    "gulp-uglifycss": "^1.1.0",
+    "haipa": "^1.0.4",
+    "uglifycss": "0.0.29"
   },
   "devDependencies": {
     "browser-sync": "^2.26.7",

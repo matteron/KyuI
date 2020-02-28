@@ -4,7 +4,7 @@ var { StatusNames, StatusDirection } = require('./constants');
 const toNodes = (html) => new DOMParser().parseFromString(html, 'text/html').body.childNodes;
 exports.toNodes = toNodes;
 
-const baseUrl = `${config.url}:${config.port}/`;
+const baseUrl = `${config.url}`;
 const apiUrl = (endpoint) => baseUrl + endpoint;
 const kyurl = (endpoint) => baseUrl + 'api/kyu/' + (endpoint ? endpoint : '');
 
