@@ -1,8 +1,9 @@
 const { toNodes, filterEntries, loopObject, directionOffset } = require('./src/helpers');
-const { html } = require('./src/templates');
+const html = require('./src/templates');
 const api = require('./src/api');
 const { StatusNames } = require('./src/constants');
 const ee = require('./src/eventBus');
+const { authenticate } = require('./src/auth');
 
 module.exports = require('./src/domLibrary');
 
@@ -16,19 +17,28 @@ let selectors = {
     types: {},
     sections: {}
 };
+let entryLoadedFlag = false;
 
 const main = () => {
+    ee.on('ready', init);
+    authenticate();
+    ee.on('status', updateStatus);
+}
+
+const init = () => {
     selectors = buildSelectors();
     api.types(data =>{
         typeData = parseTypeData(data);
         renderTypes();
+        if (entryLoadedFlag) {
+            renderEntries();
+        }
     });
     api.entries(data => {
         sorted = filterEntries(data);
         renderEntries();
+        entryLoadedFlag = true;
     });
-
-    ee.on('status', updateStatus);
 }
 
 const buildSelectors = () => {

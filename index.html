@@ -10,38 +10,40 @@
     </script>
     <link rel="stylesheet" type="text/css" href="styles.css"/>
 </head>
-<body>
+<body id="body">
     <header>
-        <h2 title="キュアイ">kyui</h2>
+        <div id="headerText">
+            <h2 title="キュアイ">kyui</h2>
+            <button onclick="lib.logout()">Logout</button>
+        </div>
         <section id="newEntry">
-            <div>
+            <div class="formGroup">
                 <label for="title">Title</label>
                 <input type="text" id="title" name="title"/>
             </div>
-            <div>
+            <div class="formGroup">
                 <label for="body">Body</label>
                 <input type="text" id="body" name="body"/>
             </div>
-            <div>
-                <label for="type">Type</label>
-                <select name="type" id="type"></select>
+            <div class="typeFormGroup">
+                <div class="formGroup">
+                    <label for="type">Type</label>
+                    <select name="type" id="type"></select>
+                </div>
+                <button type="submit" id="submitEntry" onclick="lib.submitEntry">Submit</button>
             </div>
-            <button type="submit" id="submitEntry" onclick="lib.submitEntry">Submit</button>
         </section>
     </header>
     <main>
         <h4>pending</h4>
-        <span>-------</span>
         <section id="pending">
             
         </section>
         <h4>active</h4>
-        <span>------</span>
         <section id="active">
             
         </section>
         <h4>complete</h4>
-        <span>--------</span>
         <section id="complete">
 
         </section>

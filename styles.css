@@ -1,23 +1,86 @@
+html {
+    -webkit-box-sizing: border-box;
+    -moz-box-sizing: border-box;
+    box-sizing: border-box;
+}
+*, *:before, *:after {
+    -webkit-box-sizing: inherit;
+    -moz-box-sizing: inherit;
+    box-sizing: inherit;
+}
+
 body {
+    font-family: monospace;
+    color: #FFF;
+    background-color: #111;
+    width: 22rem;
+    margin: 3rem auto;
+}
+
+body > header {
+    border-bottom: currentColor 1px solid;
+    padding-bottom: 0.5rem;
+}
+
+button {
+    background-color: transparent;
+    color: currentColor;
+    border: none;
+    cursor: pointer;
     font-family: monospace;
 }
 
-#newEntry > div, details > div {
+button:hover {
+    text-decoration: underline;
+}
+
+input, select {
+    font-family: monospace;
+    background-color: transparent;
+    border: none;
+    color: currentColor;
+    border-bottom: 1px dashed currentColor;
+}
+
+option {
+    background-color: #222;
+}
+
+#headerText {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+}
+
+.formGroup {
     display: flex;
     margin-bottom: 0.3rem;
 }
-#newEntry > div > label, details > div > label {
+
+.formGroup label {
     width: 3rem;
 }
 
-#newEntry > div > input, details > div > input {
-    width: 22rem;
+.formGroup input {
+    width: calc(100% - 3rem);
+}
+
+.typeFormGroup {
+    display: flex;
+    justify-content: space-between;
+    width: 100%;
+}
+
+.entryTypeGroup {
+    display: flex;
 }
 
 main > h4 {
     margin-bottom: 0;
+    text-decoration: underline dashed;
 }
 
+details {}
 details > div::before {
     content: '├';
 }
@@ -31,17 +94,20 @@ details > summary {
     align-items: baseline;
 }
 
+.summaryInfo {
+    width: 100%;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+}
+
 .actions {
     display: flex;
     justify-content: flex-end;
 }
 
-.summaryInfo {
-    width: 22rem;
-}
-
 .typeDisplay {
-    color: #444;
+    opacity: 0.75;
     font-size: 0.7rem;
 }
 .typeDisplay::after {
@@ -50,4 +116,8 @@ details > summary {
 
 .updateBtn {
     margin-left: 1rem;
+}
+
+.type-Link {
+    cursor: pointer;
 }

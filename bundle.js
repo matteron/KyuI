@@ -1,9 +1,10 @@
 (function(f){if(typeof exports==="object"&&typeof module!=="undefined"){module.exports=f()}else if(typeof define==="function"&&define.amd){define([],f)}else{var g;if(typeof window!=="undefined"){g=window}else if(typeof global!=="undefined"){g=global}else if(typeof self!=="undefined"){g=self}else{g=this}g.DomLibrary = f()}})(function(){var define,module,exports;return (function(){function r(e,n,t){function o(i,f){if(!n[i]){if(!e[i]){var c="function"==typeof require&&require;if(!f&&c)return c(i,!0);if(u)return u(i,!0);var a=new Error("Cannot find module '"+i+"'");throw a.code="MODULE_NOT_FOUND",a}var p=n[i]={exports:{}};e[i][0].call(p.exports,function(r){var n=e[i][1][r];return o(n||r)},p,p.exports,r,e,n,t)}return n[i].exports}for(var u="function"==typeof require&&require,i=0;i<t.length;i++)o(t[i]);return o}return r})()({1:[function(require,module,exports){
 const { toNodes, filterEntries, loopObject, directionOffset } = require('./src/helpers');
-const { html } = require('./src/templates');
+const html = require('./src/templates');
 const api = require('./src/api');
 const { StatusNames } = require('./src/constants');
 const ee = require('./src/eventBus');
+const { authenticate } = require('./src/auth');
 
 module.exports = require('./src/domLibrary');
 
@@ -17,19 +18,28 @@ let selectors = {
     types: {},
     sections: {}
 };
+let entryLoadedFlag = false;
 
 const main = () => {
+    ee.on('ready', init);
+    authenticate();
+    ee.on('status', updateStatus);
+}
+
+const init = () => {
     selectors = buildSelectors();
     api.types(data =>{
         typeData = parseTypeData(data);
         renderTypes();
+        if (entryLoadedFlag) {
+            renderEntries();
+        }
     });
     api.entries(data => {
         sorted = filterEntries(data);
         renderEntries();
+        entryLoadedFlag = true;
     });
-
-    ee.on('status', updateStatus);
 }
 
 const buildSelectors = () => {
@@ -75,7 +85,7 @@ document.addEventListener('readystatechange', () => {
         main();
     }
 });
-},{"./src/api":11,"./src/constants":13,"./src/domLibrary":14,"./src/eventBus":15,"./src/helpers":16,"./src/templates":18}],2:[function(require,module,exports){
+},{"./src/api":11,"./src/auth":12,"./src/constants":14,"./src/domLibrary":15,"./src/eventBus":16,"./src/helpers":17,"./src/templates":20}],2:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -1022,7 +1032,64 @@ module.exports = {
     types: fetchTypes,
     entries: fetchEntries,
 };
-},{"./helpers":16,"./http":17}],12:[function(require,module,exports){
+},{"./helpers":17,"./http":18}],12:[function(require,module,exports){
+const JwtHelper = require('./jwt');
+const html = require('./templates');
+const { toNodes } = require('./helpers');
+const ee = require('./eventBus');
+const { post } = require('./http');
+const { apiUrl } = require('./helpers');
+let page = {};
+
+const authenticate = () => {
+    const token = JwtHelper.getToken();
+    if (token && !JwtHelper.isExpired(token)) {
+        ee.emit('ready');
+    } else {
+        if (token) {
+            JwtHelper.removeToken();
+        }
+        razePage();
+    }
+}
+
+exports.authenticate = authenticate;
+
+const login = () => {
+    var body ={
+        password: document.getElementById('password').value
+    };
+    post(apiUrl('api/auth'), body, (data) => {
+        JwtHelper.storeToken(data.token);
+        restorePage();
+    });
+}
+
+exports.login = login;
+
+const logout = () => {
+    JwtHelper.removeToken();
+    razePage();
+}
+
+exports.logout = logout;
+
+const razePage = () => {
+    const body = document.getElementById('body');
+    page = body.innerHTML;
+    while(body.firstChild) {
+        body.firstChild.remove();
+    }
+    const loginPage = toNodes(html.loginPage())[0];
+    body.appendChild(loginPage);
+}
+
+const restorePage = () => {
+    const body = document.getElementById('body');
+    body.innerHTML = page;
+    ee.emit('ready');
+}
+},{"./eventBus":16,"./helpers":17,"./http":18,"./jwt":19,"./templates":20}],13:[function(require,module,exports){
 const ports = {
     work: 44306,
     mac: 5001,
@@ -1032,7 +1099,7 @@ module.exports = {
     url: 'https://localhost'
 };
 
-},{}],13:[function(require,module,exports){
+},{}],14:[function(require,module,exports){
 exports.StatusEnum = {
     pending: 1,
     active: 2,
@@ -1053,10 +1120,12 @@ exports.StatusDirection = {
 exports.TypeEnum = {
     link: 1
 }
-},{}],14:[function(require,module,exports){
+},{}],15:[function(require,module,exports){
 const { post, patch } = require('./http');
 const { kyurl, apiUrl } = require('./helpers');
 const { TypeEnum } = require('./constants');
+const auth = require('./auth');
+const JwtHelper = require('./jwt');
 const ee = require('./eventBus');
 
 const submitEntry = () => {
@@ -1094,18 +1163,29 @@ const openLink = (e, id) => {
     }
 }
 
+const login = (event) => {
+    if (event) {
+        event.preventDefault();
+    }
+    auth.login();
+}
+
+const logout = () => auth.logout();
+
 function DomLibrary() { }
 DomLibrary.prototype.submitEntry = submitEntry;
 DomLibrary.prototype.updateStatus = updateStatus;
 DomLibrary.prototype.updateEntry = updateEntry;
 DomLibrary.prototype.openLink = openLink;
+DomLibrary.prototype.login = login;
+DomLibrary.prototype.logout = logout;
 module.exports = DomLibrary;
-},{"./constants":13,"./eventBus":15,"./helpers":16,"./http":17}],15:[function(require,module,exports){
+},{"./auth":12,"./constants":14,"./eventBus":16,"./helpers":17,"./http":18,"./jwt":19}],16:[function(require,module,exports){
 const EventEmitter = require('events');
 const ee = new EventEmitter;
 
 module.exports = ee;
-},{"events":2}],16:[function(require,module,exports){
+},{"events":2}],17:[function(require,module,exports){
 var config = require('./config');
 var { StatusNames, StatusDirection } = require('./constants');
 
@@ -1143,11 +1223,13 @@ const directionOffset = (direction) =>
             ? -1
             : 0;
 exports.directionOffset = directionOffset;
-},{"./config":12,"./constants":13}],17:[function(require,module,exports){
+},{"./config":13,"./constants":14}],18:[function(require,module,exports){
+const JwtHelper = require('./jwt');
+
 const request = (url, options, successFunc, errorFunc) => {
     fetch(url, options).then((response) => {
         if (!response.ok) {
-            throw new Error(error);
+            throw new Error(response);
         }
         return response.json();
     }).then(successFunc)
@@ -1155,6 +1237,7 @@ const request = (url, options, successFunc, errorFunc) => {
 };
 
 const requestTypes = {
+    get: 'GET',
     post: 'POST',
     patch: 'PATCH',
     delete: 'DELETE'
@@ -1164,6 +1247,7 @@ const jsonOptions = (type, body) => ({
     method: type,
     headers: {
         'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + JwtHelper.getToken()
     },
     body: JSON.stringify(body)
 });
@@ -1175,14 +1259,8 @@ const jsonOptions = (type, body) => ({
  * @param {function} errorFunc 
  */
 const get = (url, successFunc, errorFunc) => {
-    // fetch(url).then((response) => {
-    //     if (!response.ok) {
-    //         throw new Error(error);
-    //     }
-    //     return response.json();
-    // }).then(successFunc)
-    // .catch(errorFunc ? errorFunc : console.error);
-    request(url, null, successFunc, errorFunc);
+    const options = jsonOptions(requestTypes.get);
+    request(url, options, successFunc, errorFunc);
 };
 
 exports.get = get;
@@ -1201,16 +1279,57 @@ const post = (url, body, successFunc, errorFunc) => {
 
 exports.post = post;
 
+/**
+ * 
+ * @param {string} url 
+ * @param {object} body 
+ * @param {function} successFunc 
+ * @param {function} errorFunc 
+ */
 const patch = (url, body, successFunc, errorFunc) => {
     const options = jsonOptions(requestTypes.patch, body);
     request(url, options, successFunc, errorFunc);
 }
 
 exports.patch = patch;
-},{}],18:[function(require,module,exports){
+},{"./jwt":19}],19:[function(require,module,exports){
+class JwtHelper {
+    static key = 'auth_token';
+    static storeToken(token) {
+      localStorage.setItem(this.key, token);
+    }
+  
+    static getToken() {
+      return localStorage.getItem(this.key);
+    }
+  
+    static removeToken() {
+      localStorage.removeItem(this.key);
+    }
+  
+    static decodeToken(token) {
+      if (token) {
+        return JSON.parse(atob(token.split('.')[1]));
+      }
+      return null;
+    }
+  
+    static isExpired(token) {
+      const jwt = this.decodeToken(token);
+      if (jwt) {
+        const now = new Date().getTime() / 1000;
+        return now > jwt.exp;
+      }
+      return true;
+    }  
+}
+
+module.exports = JwtHelper;
+  
+},{}],20:[function(require,module,exports){
 const { tags, attr } = require('haipa');
-const { div, option, span, details, summary, label, input, button, select } = tags;
-const { value, id, isFor, name, classes, onclick } = attr;
+const { div, option, span, details, summary, label, input, button, select, form } = tags;
+const { value, id, isFor, name, classes, onclick, type, onsubmit } = attr;
 const { StatusEnum, StatusDirection } = require('./constants.js');
 
 const typeOptions = (types, selected) => 
@@ -1224,37 +1343,49 @@ const disabled = (test) => {
 }
 
 const singleEntry = (e, types) => details([id(e.id), onclick(`lib.openLink(event, '${e.id}')`)], [
-    summary([], [
+    summary([classes(`type-${e.type.name}`)], [
         div([classes`summaryInfo`], [
-            span([classes`typeDisplay`], [e.type.name]),
-            span([], [e.title]),
-        ]),
-        div([classes`actions`], [
-            button([disabled(e.status.id === StatusEnum.pending), onclick(`lib.updateStatus('${e.id}', '${StatusDirection.demote}')`)], ['🡑']),
-            button([disabled(e.status.id === StatusEnum.complete), onclick(`lib.updateStatus('${e.id}', '${StatusDirection.elevate}')`)], ['🡓']),
-            //button([], ['🗑'])
-        ]),
+            div([], [
+                span([classes`typeDisplay`], [e.type.name]),
+                span([], [e.title]),
+            ]),
+            div([classes`actions`], [
+                button([disabled(e.status.id === StatusEnum.pending), onclick(`lib.updateStatus('${e.id}', '${StatusDirection.demote}')`)], ['🡑']),
+                button([disabled(e.status.id === StatusEnum.complete), onclick(`lib.updateStatus('${e.id}', '${StatusDirection.elevate}')`)], ['🡓']),
+                //button([], ['🗑'])
+            ]),
+        ])
     ]),
-    div([], [
+    div([classes`formGroup`], [
         label([isFor(`title:${e.id}`)], ['Title']),
         input([name(`title:${e.id}`), id(`title:${e.id}`), value(e.title)])
     ]),
-    div([], [
+    div([classes`formGroup`], [
         label([isFor(`body:${e.id}`)], ['Body']),
         input([name(`body:${e.id}`), id(`body:${e.id}`), value(e.body)])
     ]),
-    div([], [
-        label([isFor(`type:${e.id}`)], ['Type']),
-        select([name(`type:${e.id}`), id(`type:${e.id}`), value(e.type.id)], [typeOptions(types, e.type.id)]),
-        button([classes`updateBtn`, onclick(`lib.updateEntry('${e.id}')`)], ['Update'])
+    div([classes`entryTypeGroup`], [
+        div([classes`typeFormGroup`], [
+            div([classes`formGroup`], [
+                label([isFor(`type:${e.id}`)], ['Type']),
+                select([name(`type:${e.id}`), id(`type:${e.id}`), value(e.type.id)], [typeOptions(types, e.type.id)]),    
+            ]),
+            button([classes`updateBtn`, onclick(`lib.updateEntry('${e.id}')`)], ['Update'])
+        ])
     ])
 ]);
 
 const entries = (entries, types) => entries.reduce((acc, cur) => acc + '\n' + singleEntry(cur, types), '');
 
-exports.html = {
+const loginPage = () => form([onsubmit`lib.login(event)`], [
+    input([id`password`, type`password`]),
+    button([onclick`lib.login()`, type`submit`], ['login'])
+]);
+
+module.exports = {
     typeOptions,
-    entries
+    entries,
+    loginPage
 }
-},{"./constants.js":13,"haipa":10}]},{},[1])(1)
+},{"./constants.js":14,"haipa":10}]},{},[1])(1)
 });

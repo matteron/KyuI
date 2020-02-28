@@ -1,6 +1,8 @@
 const { post, patch } = require('./http');
 const { kyurl, apiUrl } = require('./helpers');
 const { TypeEnum } = require('./constants');
+const auth = require('./auth');
+const JwtHelper = require('./jwt');
 const ee = require('./eventBus');
 
 const submitEntry = () => {
@@ -38,9 +40,20 @@ const openLink = (e, id) => {
     }
 }
 
+const login = (event) => {
+    if (event) {
+        event.preventDefault();
+    }
+    auth.login();
+}
+
+const logout = () => auth.logout();
+
 function DomLibrary() { }
 DomLibrary.prototype.submitEntry = submitEntry;
 DomLibrary.prototype.updateStatus = updateStatus;
 DomLibrary.prototype.updateEntry = updateEntry;
 DomLibrary.prototype.openLink = openLink;
+DomLibrary.prototype.login = login;
+DomLibrary.prototype.logout = logout;
 module.exports = DomLibrary;
