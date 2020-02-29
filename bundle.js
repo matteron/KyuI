@@ -1094,10 +1094,12 @@ const ports = {
     work: 44306,
     mac: 5001,
 }
-module.exports = {
-    port: ports.work,
-    url: 'https://localhost'
-};
+module.exports = "development" === "development"
+    ? {
+        url: `https://localhost:${ports.work}/`
+    } : {
+       url: 'https://kyu.mattia.love/' 
+    }
 
 },{}],14:[function(require,module,exports){
 exports.StatusEnum = {
@@ -1192,7 +1194,7 @@ var { StatusNames, StatusDirection } = require('./constants');
 const toNodes = (html) => new DOMParser().parseFromString(html, 'text/html').body.childNodes;
 exports.toNodes = toNodes;
 
-const baseUrl = `${config.url}:${config.port}/`;
+const baseUrl = `${config.url}`;
 const apiUrl = (endpoint) => baseUrl + endpoint;
 const kyurl = (endpoint) => baseUrl + 'api/kyu/' + (endpoint ? endpoint : '');
 
@@ -1294,7 +1296,6 @@ const patch = (url, body, successFunc, errorFunc) => {
 exports.patch = patch;
 },{"./jwt":19}],19:[function(require,module,exports){
 class JwtHelper {
-    static key = 'auth_token';
     static storeToken(token) {
       localStorage.setItem(this.key, token);
     }
@@ -1321,9 +1322,9 @@ class JwtHelper {
         return now > jwt.exp;
       }
       return true;
-    }  
+    } 
 }
-
+JwtHelper.key = 'auth_token';
 module.exports = JwtHelper;
   
 },{}],20:[function(require,module,exports){

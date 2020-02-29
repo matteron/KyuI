@@ -1,5 +1,4 @@
 class JwtHelper {
-    static key = 'auth_token';
     static storeToken(token) {
       localStorage.setItem(this.key, token);
     }
@@ -26,8 +25,8 @@ class JwtHelper {
         return now > jwt.exp;
       }
       return true;
-    }  
+    } 
 }
-
+JwtHelper.key = 'auth_token';
 module.exports = JwtHelper;
   
